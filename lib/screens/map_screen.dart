@@ -5,61 +5,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:async'; // Added for StreamSubscription
+import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
-
-// Define a POI (Point of Interest) class with extended details
-class PointOfInterest {
-  final String name;
-  final String nameBn; // Bangla name
-  final LatLng location;
-  final IconData icon;
-  final Color color;
-  final String category;
-  final String description;
-  final String? phone;
-  final String? imageUrl;
-  final bool isCustom;
-
-  const PointOfInterest({
-    required this.name,
-    this.nameBn = '',
-    required this.location,
-    required this.icon,
-    required this.color,
-    required this.category,
-    this.description = 'A notable place in Kushtia District.',
-    this.phone,
-    this.imageUrl,
-    this.isCustom = false,
-  });
-
-  PointOfInterest copyWith({
-    String? name,
-    String? nameBn,
-    LatLng? location,
-    IconData? icon,
-    Color? color,
-    String? category,
-    String? description,
-    String? phone,
-    String? imageUrl,
-    bool? isCustom,
-  }) {
-    return PointOfInterest(
-      name: name ?? this.name,
-      nameBn: nameBn ?? this.nameBn,
-      location: location ?? this.location,
-      icon: icon ?? this.icon,
-      color: color ?? this.color,
-      category: category ?? this.category,
-      description: description ?? this.description,
-      phone: phone ?? this.phone,
-      imageUrl: imageUrl ?? this.imageUrl,
-      isCustom: isCustom ?? this.isCustom,
-    );
-  }
-}
+import 'package:shared_preferences/shared_preferences.dart';
+import '../data/pois.dart'; // Import POI data
 
 // Map Style Definition
 class MapStyle {
@@ -89,12 +38,14 @@ class _MapScreenState extends State<MapScreen> {
   final TextEditingController _searchController = TextEditingController();
   
   // New state variables for 2.0 features
-  List<PointOfInterest> _customPOIs = [];
+  final List<PointOfInterest> _customPOIs = [];
   List<LatLng> _routePoints = [];
   PointOfInterest? _routeDestination;
   bool _showBangla = false;
   bool _isLoadingRoute = false;
   String _selectedCategory = 'All'; // Category Filter State
+  String _travelMode = 'driving'; // driving, cycling, walking
+  Map<String, dynamic>? _routeStats; // To store distance/duration
 
   // Define available map styles
   final List<MapStyle> _mapStyles = [
@@ -125,326 +76,8 @@ class _MapScreenState extends State<MapScreen> {
   // Kushtia Center
   final LatLng kushtiaCenter = const LatLng(23.9088, 89.1220);
 
-  // List of Points of Interest in Kushtia with extended details
-  final List<PointOfInterest> _allPOIs = const [
-    // --- RESIDENCES ---
-    PointOfInterest(
-      name: "Shafin's Family Residence",
-      nameBn: 'সাফিনদের বাড়ি',
-      location: LatLng(23.914392, 89.117662),
-      icon: Icons.home,
-      color: Colors.deepPurple,
-      category: 'Residence',
-      description: 'The residence of Shafin and family.',
-    ),
-
-    // --- GOVERNMENT ---
-    PointOfInterest(
-      name: 'Deputy Commissioner Office (DC Court)',
-      nameBn: 'জেলা প্রশাসকের কার্যালয়',
-      location: LatLng(23.9085, 89.1225),
-      icon: Icons.account_balance,
-      color: Colors.brown,
-      category: 'Government',
-    ),
-    PointOfInterest(
-      name: 'Kushtia Municipality',
-      nameBn: 'কুষ্টিয়া পৌরসভা',
-      location: LatLng(23.9065, 89.1235),
-      icon: Icons.location_city,
-      color: Colors.brown,
-      category: 'Government',
-    ),
-    PointOfInterest(
-      name: 'Police Superintendent Office',
-      nameBn: 'পুলিশ সুপারের কার্যালয়',
-      location: LatLng(23.9095, 89.1215),
-      icon: Icons.security,
-      color: Colors.brown,
-      category: 'Government',
-    ),
-    PointOfInterest(
-      name: 'Circuit House',
-      nameBn: 'সার্কিট হাউজ',
-      location: LatLng(23.9055, 89.1265),
-      icon: Icons.villa,
-      color: Colors.brown,
-      category: 'Government',
-    ),
-
-    // --- EDUCATION ---
-    PointOfInterest(
-      name: 'Islamic University',
-      nameBn: 'ইসলামী বিশ্ববিদ্যালয়',
-      location: LatLng(23.7245, 89.1535),
-      icon: Icons.school,
-      color: Colors.blue,
-      category: 'Education',
-      description: 'A major public research university.',
-      phone: '+880-71-74560',
-    ),
-    PointOfInterest(
-      name: 'Kushtia Govt College',
-      nameBn: 'কুষ্টিয়া সরকারি কলেজ',
-      location: LatLng(23.9050, 89.1245),
-      icon: Icons.school,
-      color: Colors.blue,
-      category: 'Education',
-      description: 'Premier government college.',
-    ),
-    PointOfInterest(
-      name: 'Kushtia Zilla School',
-      nameBn: 'কুষ্টিয়া জেলা স্কুল',
-      location: LatLng(23.9065, 89.1180),
-      icon: Icons.school,
-      color: Colors.blue,
-      category: 'Education',
-    ),
-    PointOfInterest(
-      name: 'Police Lines School',
-      nameBn: 'পুলিশ লাইন্স স্কুল',
-      location: LatLng(23.9120, 89.1100),
-      icon: Icons.school,
-      color: Colors.blue,
-      category: 'Education',
-    ),
-     PointOfInterest(
-      name: 'Kushtia Medical College',
-      nameBn: 'কুষ্টিয়া মেডিকেল কলেজ',
-      location: LatLng(23.9000, 89.1150),
-      icon: Icons.school,
-      color: Colors.blue,
-      category: 'Education',
-    ),
-
-    // --- HEALTH ---
-    PointOfInterest(
-      name: 'Kushtia General Hospital',
-      nameBn: 'কুষ্টিয়া জেনারেল হাসপাতাল',
-      location: LatLng(23.9100, 89.1280),
-      icon: Icons.local_hospital,
-      color: Colors.red,
-      category: 'Hospital',
-      description: '250-bed General Hospital.',
-      phone: '16263',
-    ),
-    PointOfInterest(
-      name: 'Sono Hospital',
-      nameBn: 'সনো হাসপাতাল',
-      location: LatLng(23.9020, 89.1300),
-      icon: Icons.local_hospital,
-      color: Colors.red,
-      category: 'Hospital',
-      description: 'Famous diagnostic center and hospital.',
-    ),
-    PointOfInterest(
-      name: 'Ad-Din Hospital',
-      nameBn: 'আদ-দ্বীন হাসপাতাল',
-      location: LatLng(23.8980, 89.1250),
-      icon: Icons.local_hospital,
-      color: Colors.red,
-      category: 'Hospital',
-    ),
-    PointOfInterest(
-      name: 'Diabetes Hospital',
-      nameBn: 'ডায়াবেটিস হাসপাতাল',
-      location: LatLng(23.9210, 89.1310),
-      icon: Icons.local_hospital,
-      color: Colors.red,
-      category: 'Hospital',
-    ),
-
-    // --- RELIGIOUS ---
-    PointOfInterest(
-      name: 'Lalon Shah Mazar',
-      nameBn: 'লালন শাহ মাজার',
-      location: LatLng(23.7765, 89.1620),
-      icon: Icons.mosque,
-      color: Colors.green,
-      category: 'Religious',
-      description: 'Shrine of Fakir Lalon Shah.',
-    ),
-    PointOfInterest(
-      name: 'Boro Jame Masjid',
-      nameBn: 'বড় জামে মসজিদ',
-      location: LatLng(23.9068, 89.1195),
-      icon: Icons.mosque,
-      color: Colors.green,
-      category: 'Religious',
-      description: 'Central mosque of Kushtia town.',
-    ),
-    PointOfInterest(
-      name: 'Thanapara Jame Masjid',
-      nameBn: 'থানাপাড়া জামে মসজিদ',
-      location: LatLng(23.9090, 89.1210),
-      icon: Icons.mosque,
-      color: Colors.green,
-      category: 'Religious',
-    ),
-
-    // --- BANK & ATM ---
-    PointOfInterest(
-      name: 'Islami Bank Main Br.',
-      nameBn: 'ইসলামী ব্যাংক',
-      location: LatLng(23.9060, 89.1210),
-      icon: Icons.account_balance,
-      color: Colors.indigo,
-      category: 'Bank',
-    ),
-    PointOfInterest(
-      name: 'Sonali Bank Corp.',
-      nameBn: 'সোনালী ব্যাংক',
-      location: LatLng(23.9055, 89.1190),
-      icon: Icons.account_balance,
-      color: Colors.indigo,
-      category: 'Bank',
-    ),
-    PointOfInterest(
-      name: 'DBBL ATM Booth',
-      nameBn: 'ডাচ-বাংলা এটিএম',
-      location: LatLng(23.9085, 89.1230),
-      icon: Icons.atm,
-      color: Colors.indigo,
-      category: 'ATM',
-    ),
-
-    // --- FOOD ---
-    PointOfInterest(
-      name: 'Kheya Restaurant',
-      nameBn: 'খেয়া রেস্তোরাঁ',
-      location: LatLng(23.9040, 89.1260),
-      icon: Icons.restaurant,
-      color: Colors.pink,
-      category: 'Restaurant',
-      description: 'Riverside dining.',
-    ),
-    PointOfInterest(
-      name: 'Mouban Restaurant',
-      nameBn: 'মৌবন রেস্তোরাঁ',
-      location: LatLng(23.9075, 89.1225),
-      icon: Icons.restaurant,
-      color: Colors.pink,
-      category: 'Restaurant',
-      description: 'Sweets and snacks.',
-    ),
-    PointOfInterest(
-      name: 'Jahangir Hotel',
-      nameBn: 'জাহাঙ্গীর হোটেল',
-      location: LatLng(23.9030, 89.1180),
-      icon: Icons.restaurant,
-      color: Colors.pink,
-      category: 'Restaurant',
-      description: 'Famous for local food.',
-    ),
-    PointOfInterest(
-      name: 'KFC (Ruma)',
-      nameBn: 'কেএফসি',
-      location: LatLng(23.9070, 89.1240),
-      icon: Icons.fastfood,
-      color: Colors.pink,
-      category: 'Restaurant',
-    ),
-
-    // --- HOTELS ---
-    PointOfInterest(
-      name: 'Hotel River View',
-      nameBn: 'হোটেল রিভার ভিউ',
-      location: LatLng(23.9045, 89.1270),
-      icon: Icons.hotel,
-      color: Colors.teal,
-      category: 'Hotel',
-    ),
-    PointOfInterest(
-      name: 'Desha Tarc',
-      nameBn: 'দিশা টার্ক',
-      location: LatLng(23.8800, 89.1100),
-      icon: Icons.hotel,
-      color: Colors.teal,
-      category: 'Hotel',
-      description: 'Training center and rest house.',
-    ),
-    PointOfInterest(
-      name: 'Hotel Al-Amin',
-      nameBn: 'হোটেল আল-আমিন',
-      location: LatLng(23.9060, 89.1200),
-      icon: Icons.hotel,
-      color: Colors.teal,
-      category: 'Hotel',
-    ),
-
-    // --- FUEL ---
-    PointOfInterest(
-      name: 'Mondol Filling Station',
-      nameBn: 'মন্ডল ফিলিং স্টেশন',
-      location: LatLng(23.8950, 89.1150),
-      icon: Icons.local_gas_station,
-      color: Colors.orange,
-      category: 'Fuel',
-    ),
-    PointOfInterest(
-      name: 'Biswas Filling Station',
-      nameBn: 'বিশ্বাস ফিলিং স্টেশন',
-      location: LatLng(23.9150, 89.1120),
-      icon: Icons.local_gas_station,
-      color: Colors.orange,
-      category: 'Fuel',
-    ),
-
-     // --- MARKETS ---
-    PointOfInterest(
-      name: 'Kushtia Bazar',
-      nameBn: 'কুষ্টিয়া বাজার',
-      location: LatLng(23.9070, 89.1200),
-      icon: Icons.store,
-      color: Colors.purple,
-      category: 'Market',
-      description: 'Main market area.',
-    ),
-    PointOfInterest(
-      name: 'NS Road Market',
-      nameBn: 'এন এস রোড',
-      location: LatLng(23.9060, 89.1220),
-      icon: Icons.shopping_bag,
-      color: Colors.purple,
-      category: 'Market',
-    ),
-
-    // --- LANDMARKS ---
-    PointOfInterest(
-      name: 'Lalon Shah Bridge',
-      nameBn: 'লালন শাহ সেতু',
-      location: LatLng(24.0720, 89.0380),
-      icon: Icons.architecture,
-      color: Colors.brown,
-      category: 'Landmark',
-    ),
-    PointOfInterest(
-      name: 'Hardinge Bridge',
-      nameBn: 'হার্ডিঞ্জ ব্রিজ',
-      location: LatLng(24.0795, 89.0290),
-      icon: Icons.train,
-      color: Colors.brown,
-      category: 'Landmark',
-    ),
-     PointOfInterest(
-      name: 'Jagati Railway Station',
-      nameBn: 'জগতি রেলওয়ে স্টেশন',
-      location: LatLng(23.8880, 89.1350),
-      icon: Icons.train,
-      color: Colors.brown,
-      category: 'Landmark',
-      description: 'First railway station in East Bengal (1862).',
-    ),
-    PointOfInterest(
-      name: 'Renwick Jajneswar',
-      nameBn: 'রেনউইক যজ্ঞেশ্বর',
-      location: LatLng(23.9110, 89.1320),
-      icon: Icons.park,
-      color: Colors.green,
-      category: 'Park',
-      description: 'River bank park.',
-    ),
-  ];
+  // Use POI data from lib/data/pois.dart
+  List<PointOfInterest> get _allPOIs => kushtiaPOIs;
 
   List<PointOfInterest> get _allPOIsIncludingCustom => [..._allPOIs, ..._customPOIs];
 
@@ -479,7 +112,42 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _currentMapStyle = _mapStyles[0];
+    _loadCustomPOIs(); // Load saved custom places
     _checkLocationPermission();
+  }
+
+  // ========== FEATURE: Persist Custom Places ==========
+  Future<void> _loadCustomPOIs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('customPOIs') ?? [];
+    setState(() {
+      _customPOIs.clear();
+      for (final jsonStr in saved) {
+        final data = jsonDecode(jsonStr);
+        _customPOIs.add(PointOfInterest(
+          name: data['name'],
+          nameBn: data['nameBn'] ?? '',
+          location: LatLng(data['lat'], data['lng']),
+          icon: Icons.place,
+          color: Colors.purple,
+          category: 'Custom',
+          isCustom: true,
+        ));
+      }
+    });
+  }
+
+  Future<void> _saveCustomPOIs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> encoded = _customPOIs.map((poi) {
+      return jsonEncode({
+        'name': poi.name,
+        'nameBn': poi.nameBn,
+        'lat': poi.location.latitude,
+        'lng': poi.location.longitude,
+      });
+    }).toList();
+    await prefs.setStringList('customPOIs', encoded);
   }
 
   @override
@@ -591,9 +259,9 @@ class _MapScreenState extends State<MapScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: poi.color.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  color: poi.color.withAlpha(51),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                   child: Icon(poi.icon, size: 32, color: poi.color),
                 ),
                 const SizedBox(width: 16),
@@ -613,9 +281,10 @@ class _MapScreenState extends State<MapScreen> {
                   IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: () {
-                      setState(() => _customPOIs.remove(poi));
-                      Navigator.pop(context);
-                    },
+                    setState(() => _customPOIs.remove(poi));
+                    _saveCustomPOIs(); // Persist deletion
+                    Navigator.pop(context);
+                  },
                   ),
               ],
             ),
@@ -655,16 +324,17 @@ class _MapScreenState extends State<MapScreen> {
                     onTap: () => _makePhoneCall(poi.phone!),
                   ),
                 // Share Button
-                _buildActionButton(
-                  icon: Icons.share,
-                  label: 'Share',
-                  color: Colors.orange,
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Share feature coming soon!')),
-                    );
-                  },
-                ),
+              _buildActionButton(
+                icon: Icons.share,
+                label: 'Share',
+                color: Colors.orange,
+                onTap: () async {
+                  final url = 'https://www.google.com/maps/search/?api=1&query=${poi.location.latitude},${poi.location.longitude}';
+                  if (await canLaunchUrl(Uri.parse(url))) {
+                    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                  }
+                },
+              ),
               ],
             ),
           ],
@@ -759,8 +429,9 @@ class _MapScreenState extends State<MapScreen> {
                         : descController.text,
                     isCustom: true,
                   ));
-                });
-                Navigator.pop(context);
+                });  // end setState
+              _saveCustomPOIs(); // Persist new place
+              Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Added: ${nameController.text}')),
                 );
@@ -792,7 +463,8 @@ class _MapScreenState extends State<MapScreen> {
       final end = destination.location;
       
       // Using OSRM (Open Source Routing Machine) - FREE API
-      final url = 'https://router.project-osrm.org/route/v1/driving/'
+      // Profiles: driving, cycling, walking
+      final url = 'https://router.project-osrm.org/route/v1/$_travelMode/'
           '${start.longitude},${start.latitude};${end.longitude},${end.latitude}'
           '?geometries=geojson&overview=full';
 
@@ -805,11 +477,29 @@ class _MapScreenState extends State<MapScreen> {
           final routePoints = coords.map<LatLng>((c) => LatLng(c[1], c[0])).toList();
           
           final distance = data['routes'][0]['distance'] / 1000; // km
-          final duration = data['routes'][0]['duration'] / 60; // minutes
+          
+          // Calculate duration based on travel mode speeds (km/h)
+          // driving: ~40 km/h avg in city, cycling: ~15 km/h, walking: ~5 km/h
+          double speedKmH;
+          switch (_travelMode) {
+            case 'walking':
+              speedKmH = 5.0;
+              break;
+            case 'cycling':
+              speedKmH = 15.0;
+              break;
+            default: // driving
+              speedKmH = 40.0;
+          }
+          final duration = (distance / speedKmH) * 60; // minutes
           
           setState(() {
             _routePoints = routePoints;
             _isLoadingRoute = false;
+            _routeStats = {
+              'distance': distance.toStringAsFixed(1),
+              'duration': duration.toStringAsFixed(0),
+            };
           });
           
           // Fit map to show entire route
@@ -817,13 +507,6 @@ class _MapScreenState extends State<MapScreen> {
             final bounds = LatLngBounds.fromPoints(routePoints);
             _mapController.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50)));
           }
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Route: ${distance.toStringAsFixed(1)} km, ~${duration.toStringAsFixed(0)} min'),
-              duration: const Duration(seconds: 3),
-            ),
-          );
         }
       } else {
         throw Exception('Failed to get route');
@@ -840,7 +523,15 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _routePoints = [];
       _routeDestination = null;
+      _routeStats = null;
     });
+  }
+
+  void _changeTravelMode(String mode) {
+    if (_routeDestination != null) {
+      setState(() => _travelMode = mode);
+      _getRouteToDestination(_routeDestination!);
+    }
   }
 
   // ========== FEATURE 4: Bangla Toggle ==========
@@ -878,7 +569,7 @@ class _MapScreenState extends State<MapScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: isSelected ? Colors.teal.withOpacity(0.2) : Colors.grey[200],
+                          color: isSelected ? Colors.teal.withAlpha(51) : Colors.grey[200],
                           border: isSelected ? Border.all(color: Colors.teal, width: 2) : null,
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -902,6 +593,26 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Widget _buildModeButton(IconData icon, String mode) {
+    bool isSelected = _travelMode == mode;
+    return GestureDetector(
+      onTap: () => _changeTravelMode(mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.teal : Colors.grey[200],
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected ? Border.all(color: Colors.teal.shade700) : null,
+        ),
+        child: Icon(
+          icon,
+          color: isSelected ? Colors.white : Colors.black54,
+          size: 28,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -917,6 +628,100 @@ class _MapScreenState extends State<MapScreen> {
             tooltip: 'Toggle Language',
           ),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.teal, Colors.tealAccent],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  const Icon(Icons.map, size: 48, color: Colors.white),
+                  const SizedBox(height: 8),
+                  Text(
+                    _showBangla ? 'কুষ্টিয়া ম্যাপস' : 'Kushtia Maps',
+                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const Text('v1.0.0', style: TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person, color: Colors.teal),
+              title: const Text('Developer'),
+              subtitle: const Text('Sarfaraz Ahamed Shovon'),
+              onTap: () {
+                Navigator.pop(context);
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('About Developer'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircleAvatar(
+                          radius: 40,
+                          backgroundColor: Colors.teal,
+                          child: Icon(Icons.person, size: 40, color: Colors.white),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Sarfaraz Ahamed Shovon',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text('Flutter Developer', style: TextStyle(color: Colors.grey[600])),
+                        const SizedBox(height: 16),
+                        const Text('Built with ❤️ for Kushtia'),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.layers, color: Colors.teal),
+              title: const Text('Map Style'),
+              onTap: () {
+                Navigator.pop(context);
+                _showStylePicker();
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.info_outline, color: Colors.teal),
+              title: const Text('About App'),
+              onTap: () {
+                Navigator.pop(context);
+                showAboutDialog(
+                  context: context,
+                  applicationName: 'Kushtia Maps',
+                  applicationVersion: '1.0.0',
+                  applicationLegalese: '© 2024 Sarfaraz Ahamed Shovon',
+                  children: [
+                    const SizedBox(height: 16),
+                    const Text('A free, open-source map application for Kushtia District.'),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
       body: Stack(
         children: [
@@ -978,11 +783,11 @@ class _MapScreenState extends State<MapScreen> {
                                   width: 10,
                                   height: 4,
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.3),
+                                    color: Colors.black.withAlpha(77),
                                     borderRadius: BorderRadius.circular(5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.3),
+                                        color: Colors.black.withAlpha(77),
                                         blurRadius: 2,
                                       ),
                                     ],
@@ -1018,9 +823,9 @@ class _MapScreenState extends State<MapScreen> {
                               margin: const EdgeInsets.only(top: 2),
                               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.9),
+                                color: Colors.white.withAlpha(230),
                                 borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.grey.withOpacity(0.5)),
+                                border: Border.all(color: Colors.grey.withAlpha(128)),
                               ),
                               child: Text(
                                 poi.nameBn,
@@ -1051,7 +856,7 @@ class _MapScreenState extends State<MapScreen> {
                             width: 60,
                             height: 60,
                             decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.2),
+                              color: Colors.blue.withAlpha(51),
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -1065,7 +870,7 @@ class _MapScreenState extends State<MapScreen> {
                               border: Border.all(color: Colors.white, width: 3),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
+                                  color: Colors.black.withAlpha(77),
                                   blurRadius: 4,
                                   offset: const Offset(0, 2),
                                 ),
@@ -1194,18 +999,57 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
           
-          // Clear Route Button (when route is active)
-          if (_routePoints.isNotEmpty)
+          // Navigation Dashboard (displayed when route is active)
+          if (_routePoints.isNotEmpty && _routeStats != null)
             Positioned(
-              bottom: 160,
-              left: 16,
-              child: FloatingActionButton(
-                heroTag: 'clear_route',
-                mini: true,
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                onPressed: _clearRoute,
-                child: const Icon(Icons.close),
+              bottom: 20,
+              left: 10,
+              right: 10,
+              child: Card(
+                elevation: 8,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Stats Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          Column(
+                            children: [
+                              Text('${_routeStats!['duration']} min', 
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal)),
+                              const Text('Est. Time', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Text('${_routeStats!['distance']} km', 
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal)),
+                              const Text('Distance', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            ],
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.red),
+                            onPressed: _clearRoute,
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      // Travel Mode Selector
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildModeButton(Icons.directions_car, 'driving'),
+                          _buildModeButton(Icons.directions_bike, 'cycling'),
+                          _buildModeButton(Icons.directions_walk, 'walking'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
         ],
