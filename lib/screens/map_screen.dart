@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async'; // Added for StreamSubscription
 import 'package:url_launcher/url_launcher.dart';
 
 // Define a POI (Point of Interest) class with extended details
@@ -83,6 +84,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   LatLng? _currentPosition;
+  StreamSubscription<Position>? _positionStreamSubscription; // For live updates
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
   
@@ -92,6 +94,7 @@ class _MapScreenState extends State<MapScreen> {
   PointOfInterest? _routeDestination;
   bool _showBangla = false;
   bool _isLoadingRoute = false;
+  String _selectedCategory = 'All'; // Category Filter State
 
   // Define available map styles
   final List<MapStyle> _mapStyles = [
@@ -124,6 +127,51 @@ class _MapScreenState extends State<MapScreen> {
 
   // List of Points of Interest in Kushtia with extended details
   final List<PointOfInterest> _allPOIs = const [
+    // --- RESIDENCES ---
+    PointOfInterest(
+      name: "Shafin's Family Residence",
+      nameBn: 'সাফিনদের বাড়ি',
+      location: LatLng(23.914392, 89.117662),
+      icon: Icons.home,
+      color: Colors.deepPurple,
+      category: 'Residence',
+      description: 'The residence of Shafin and family.',
+    ),
+
+    // --- GOVERNMENT ---
+    PointOfInterest(
+      name: 'Deputy Commissioner Office (DC Court)',
+      nameBn: 'জেলা প্রশাসকের কার্যালয়',
+      location: LatLng(23.9085, 89.1225),
+      icon: Icons.account_balance,
+      color: Colors.brown,
+      category: 'Government',
+    ),
+    PointOfInterest(
+      name: 'Kushtia Municipality',
+      nameBn: 'কুষ্টিয়া পৌরসভা',
+      location: LatLng(23.9065, 89.1235),
+      icon: Icons.location_city,
+      color: Colors.brown,
+      category: 'Government',
+    ),
+    PointOfInterest(
+      name: 'Police Superintendent Office',
+      nameBn: 'পুলিশ সুপারের কার্যালয়',
+      location: LatLng(23.9095, 89.1215),
+      icon: Icons.security,
+      color: Colors.brown,
+      category: 'Government',
+    ),
+    PointOfInterest(
+      name: 'Circuit House',
+      nameBn: 'সার্কিট হাউজ',
+      location: LatLng(23.9055, 89.1265),
+      icon: Icons.villa,
+      color: Colors.brown,
+      category: 'Government',
+    ),
+
     // --- EDUCATION ---
     PointOfInterest(
       name: 'Islamic University',
@@ -400,8 +448,22 @@ class _MapScreenState extends State<MapScreen> {
 
   List<PointOfInterest> get _allPOIsIncludingCustom => [..._allPOIs, ..._customPOIs];
 
+  // Dynamic Category List
+  List<String> get _categories {
+    final categories = _allPOIsIncludingCustom.map((e) => e.category).toSet().toList();
+    categories.sort();
+    return ['All', ...categories];
+  }
+
   List<PointOfInterest> get _filteredPOIs {
-    final allPois = _allPOIsIncludingCustom;
+    var allPois = _allPOIsIncludingCustom;
+    
+    // 1. Filter by Category
+    if (_selectedCategory != 'All') {
+      allPois = allPois.where((poi) => poi.category == _selectedCategory).toList();
+    }
+
+    // 2. Filter by Search Query
     if (_searchQuery.isEmpty) {
       return allPois;
     }
@@ -426,9 +488,34 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
+  // ========== FEATURE: Real-time Location ==========
+  void _startLiveLocationUpdates() {
+    if (_positionStreamSubscription != null) return; // Already listening
+
+    const LocationSettings locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation, // Optimized for navigation
+      distanceFilter: 5, // Update every 5 meters for smoother movement
+    );
+
+    _positionStreamSubscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+      (Position? position) {
+        if (position != null) {
+          setState(() {
+            _currentPosition = LatLng(position.latitude, position.longitude);
+          });
+        }
+      },
+    );
+  }
+
   Future<void> _checkLocationPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
+    if (!serviceEnabled) {
+      if (mounted) {
+       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location services disabled')));
+      }
+      return;
+    }
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -442,16 +529,24 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _getCurrentLocation() async {
     try {
+      // 1. Get initial fix
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.best,
           distanceFilter: 0,
         ),
       );
+      
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
       });
+      
+      // 2. Move camera
       _mapController.move(_currentPosition!, 16.0);
+
+      // 3. Start Live Stream
+      _startLiveLocationUpdates();
+
     } catch (e) {
       debugPrint("Error getting location: $e");
       if (mounted) {
@@ -866,72 +961,118 @@ class _MapScreenState extends State<MapScreen> {
                   // POI Markers
                   ..._filteredPOIs.map((poi) => Marker(
                     point: poi.location,
-                    width: 60, // Increased width for the new pin
-                    height: 60, // Increased height for the new pin
-                    alignment: Alignment.topCenter, // Align so the bottom tip is at the location
+                    width: 100, // Increase width to accommodate text
+                    height: 90, // Increase height for text
+                    alignment: Alignment.topCenter,
                     child: GestureDetector(
                       onTap: () => _showPlaceDetails(poi),
-                      child: Stack(
-                        alignment: Alignment.topCenter,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Shadow for depth
-                          Positioned(
-                            bottom: 2,
-                            child: Container(
-                              width: 10,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(5),
-                                boxShadow: [
-                                  BoxShadow(
+                          Stack(
+                            alignment: Alignment.topCenter,
+                            children: [
+                              Positioned(
+                                bottom: 2,
+                                child: Container(
+                                  width: 10,
+                                  height: 4,
+                                  decoration: BoxDecoration(
                                     color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 2,
+                                    borderRadius: BorderRadius.circular(5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 2,
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
-                          // The Pin Shape
-                          Icon(
-                            Icons.location_on,
-                            size: 60,
-                            color: poi.color,
-                          ),
-                          // The Category Icon inside the Pin
-                          Positioned(
-                            top: 9, 
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                poi.icon,
-                                size: 20,
+                              Icon(
+                                Icons.location_on,
+                                size: 50, // Slightly smaller pin
                                 color: poi.color,
                               ),
-                            ),
+                              Positioned(
+                                top: 7,
+                                child: Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    poi.icon,
+                                    size: 18,
+                                    color: poi.color,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                          // Bangla Label (Visible only when toggle is ON)
+                          if (_showBangla && poi.nameBn.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: Colors.grey.withOpacity(0.5)),
+                              ),
+                              child: Text(
+                                poi.nameBn,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                         ],
                       ),
                     ),
                   )),
-                  // User Location Marker
+                  // User Location Marker (Modern GPS Puck)
                   if (_currentPosition != null)
                     Marker(
                       point: _currentPosition!,
-                      width: 50,
-                      height: 50,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.3),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.blue, width: 2),
-                        ),
-                        child: const Icon(Icons.person_pin_circle, size: 30, color: Colors.blue),
+                      width: 60,
+                      height: 60,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Outer Glow (imulates pulsing)
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          // Core Dot
+                          Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                 ],
@@ -972,6 +1113,39 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
+                // Category Filter Chips
+                if (_searchQuery.isEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    height: 40,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _categories.length,
+                      itemBuilder: (context, index) {
+                        final category = _categories[index];
+                        final isSelected = _selectedCategory == category;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(category, style: TextStyle(
+                              color: isSelected ? Colors.white : Colors.black87,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            )),
+                            selected: isSelected,
+                            onSelected: (selected) {
+                              setState(() {
+                                _selectedCategory = selected ? category : 'All';
+                              });
+                            },
+                            selectedColor: Colors.teal,
+                            backgroundColor: Colors.white,
+                            elevation: 2,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 if (_searchQuery.isNotEmpty && _filteredPOIs.isNotEmpty)
                   Container(
                     margin: const EdgeInsets.only(top: 4),
@@ -1036,12 +1210,44 @@ class _MapScreenState extends State<MapScreen> {
             ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'my_location',
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-        onPressed: _getCurrentLocation,
-        child: const Icon(Icons.my_location),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // Zoom In
+          FloatingActionButton(
+            heroTag: 'zoom_in',
+            mini: true,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.teal,
+            onPressed: () {
+              final currentZoom = _mapController.camera.zoom;
+              _mapController.move(_mapController.camera.center, currentZoom + 1);
+            },
+            child: const Icon(Icons.add),
+          ),
+          const SizedBox(height: 8),
+          // Zoom Out
+          FloatingActionButton(
+            heroTag: 'zoom_out',
+            mini: true,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.teal,
+            onPressed: () {
+              final currentZoom = _mapController.camera.zoom;
+              _mapController.move(_mapController.camera.center, currentZoom - 1);
+            },
+            child: const Icon(Icons.remove),
+          ),
+          const SizedBox(height: 16),
+          // My Location
+          FloatingActionButton(
+            heroTag: 'my_location',
+            backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
+            onPressed: _getCurrentLocation,
+            child: const Icon(Icons.my_location),
+          ),
+        ],
       ),
     );
   }
