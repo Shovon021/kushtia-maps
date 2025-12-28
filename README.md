@@ -58,21 +58,21 @@ Discover popular places across 15+ categories:
 | <img src="assets/screenshots/home.png" width="250" /> | <img src="assets/screenshots/pois.png" width="250" /> |
 | *Clean search bar & category chips* | *Interactive markers for 60+ places* |
 
-### 🚀 Navigation & Features
-*Get directions and access powerful tools.*
+### 🚀 Navigation & Tracking
+*Real-time GPS tracking and multi-mode routing.*
 
-| **Real-time Navigation** | **App Drawer & Credits** |
+| **Live Location** | **Turn-by-Turn Navigation** |
 |:---:|:---:|
-| <img src="assets/screenshots/route.png" width="250" /> | <img src="assets/screenshots/drawer.png" width="250" /> |
-| *Driving/Walking routes with time estimates* | *Quick access to settings & info* |
+| <img src="assets/screenshots/location.png" width="250" /> | <img src="assets/screenshots/route.png" width="250" /> |
+| *Precise user location tracking* | *Driving/Walking routes with time estimates* |
 
-### 🎨 Personalize Your Map
-*Choose the look that fits your vibe.*
+### 🎨 Features & Personalization
+*Deep customization options.*
 
-<div align="center">
-  <img src="assets/screenshots/style.png" width="300" />
-  <p><b>Map Style Picker</b><br><i>Toggle between Standard, Modern, Dark Mode, and Satellite View instantly.</i></p>
-</div>
+| **App Drawer** | **Map Styles** |
+|:---:|:---:|
+| <img src="assets/screenshots/drawer.png" width="250" /> | <img src="assets/screenshots/style.png" width="250" /> |
+| *Quick access to settings & info* | *Standard, Modern, Dark & Satellite modes* |
 
 ---
 
