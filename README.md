@@ -2,6 +2,15 @@
 
 **Kushtia Maps** is a feature-rich, open-source Flutter navigation application designed specifically for **Kushtia District, Bangladesh**. It offers real-time GPS tracking, detailed Points of Interest (POIs), and multi-mode navigation.
 
+# 📥 Download App
+**[Download Kushtia Maps v1.0 (APK)](releases/kushtia-maps-v1.0.apk)**
+
+### 📲 How to Install
+1.  **Download** the `.apk` file from the link above.
+2.  Open the file on your Android device.
+3.  If prompted, allow **"Install from Unknown Sources"** (since this is a developer build).
+4.  Tap **Install** and enjoy! 🚀
+
 ---
 
 ## 🚀 Key Features
