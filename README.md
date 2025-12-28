@@ -44,8 +44,26 @@ Discover popular places across 15+ categories:
 
 ---
 
+---
+
 ## 📱 Screenshots
-*(Add screenshots here after running the app)*
+
+| Home & POIs | Details & Navigation |
+|:---:|:---:|
+| <img src="assets/screenshots/home.png" width="200" /> <img src="assets/screenshots/pois.png" width="200" /> | <img src="assets/screenshots/route.png" width="200" /> <img src="assets/screenshots/drawer.png" width="200" /> |
+
+<div align="center">
+  <img src="assets/screenshots/style.png" width="200" />
+  <p><i>Standard, Modern, Dark & Satellite Styles</i></p>
+</div>
+
+---
+
+## ⚠️ Note for Users Outside Kushtia
+This app is strictly designed for **Kushtia District**. 
+- The map view is **locked** to the Kushtia region. 
+- If you check the app from outside Kushtia (e.g., Dhaka or abroad), you **will not see your current location** on the map (unless you spoof your GPS to Kushtia).
+- You can still explore the map, search for places, and view details, but navigation features will simulate starting from within the district.
 
 ---
 
