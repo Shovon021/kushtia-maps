@@ -48,13 +48,30 @@ Discover popular places across 15+ categories:
 
 ## 📱 Screenshots
 
-| Home & POIs | Details & Navigation |
+## 📱 Screenshots
+
+### 🌍 Explore & Discover
+*Visualize popular locations, banks, restaurants, and more with our clean interface.*
+
+| **Home Screen** | **Points of Interest (POIs)** |
 |:---:|:---:|
-| <img src="assets/screenshots/home.png" width="200" /> <img src="assets/screenshots/pois.png" width="200" /> | <img src="assets/screenshots/route.png" width="200" /> <img src="assets/screenshots/drawer.png" width="200" /> |
+| <img src="assets/screenshots/home.png" width="250" /> | <img src="assets/screenshots/pois.png" width="250" /> |
+| *Clean search bar & category chips* | *Interactive markers for 60+ places* |
+
+### 🚀 Navigation & Features
+*Get directions and access powerful tools.*
+
+| **Real-time Navigation** | **App Drawer & Credits** |
+|:---:|:---:|
+| <img src="assets/screenshots/route.png" width="250" /> | <img src="assets/screenshots/drawer.png" width="250" /> |
+| *Driving/Walking routes with time estimates* | *Quick access to settings & info* |
+
+### 🎨 Personalize Your Map
+*Choose the look that fits your vibe.*
 
 <div align="center">
-  <img src="assets/screenshots/style.png" width="200" />
-  <p><i>Standard, Modern, Dark & Satellite Styles</i></p>
+  <img src="assets/screenshots/style.png" width="300" />
+  <p><b>Map Style Picker</b><br><i>Toggle between Standard, Modern, Dark Mode, and Satellite View instantly.</i></p>
 </div>
 
 ---
